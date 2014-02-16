@@ -13,6 +13,7 @@ from conda_build import external
 from conda_build import environ
 from conda_build import utils
 from conda.compat import lchmod
+from conda.utils import memoized
 
 if sys.platform.startswith('linux'):
     from conda_build import elf
@@ -153,6 +154,10 @@ def mk_relative_osx(path):
     for name in macho.otool(path):
         assert not name.startswith(build_prefix), path
 
+@memoized
+def get_chrpath():
+    return external.find_executable('chrpath')
+
 def mk_relative(f):
     assert sys.platform != 'win32'
     if f.startswith('bin/'):
@@ -161,7 +166,7 @@ def mk_relative(f):
     path = join(build_prefix, f)
     if sys.platform.startswith('linux') and is_obj(path):
         rpath = '$ORIGIN/' + utils.rel_lib(f)
-        chrpath = external.find_executable('chrpath')
+        chrpath = get_chrpath()
         call([chrpath, '-r', rpath, path])
 
     if sys.platform == 'darwin' and is_obj(path):
