@@ -175,10 +175,16 @@ def adjust_rpath(path):
     lib_path = '%s/lib' % build_prefix
 
     if rpath == lib_path:
-        new_rpath = '$ORIGIN/%s' % normpath(rel_path.count('/') * '../')
+        new_rpath = '$ORIGIN/%s/%s' % (
+            normpath(rel_path.count('/') * '../'),
+            rel_rpath,
+        )
     else:
         # .so is linking to somewhere outside of $PREFIX/lib; alter RPATH to
-        # point to that location first, then $PREFIX/lib second.
+        # point to that location first, then $PREFIX/lib second.  Note: with
+        # the fixed logic above and everything built from scratch, I'm not
+        # seeing this code path being triggered anymore.  Perhaps the accurate
+        # RPATH change above is sufficient.
         rel_file = path.replace(build_prefix, '')[1:]
         rel_lib_path = utils.rel_lib(rel_file)
         new_rpath = '$ORIGIN/%s/%s:$ORIGIN/%s' % (
