@@ -5,8 +5,8 @@ import os
 import sys
 import stat
 from glob import glob
-from subprocess import call, check_call
-from os.path import basename, join, splitext, isdir, isfile
+from subprocess import call, check_call, check_output
+from os.path import basename, join, splitext, isdir, isfile, normpath
 
 from conda_build.config import build_prefix, build_python, PY3K
 from conda_build import external
@@ -158,6 +158,37 @@ def mk_relative_osx(path):
 def get_chrpath():
     return external.find_executable('chrpath')
 
+def adjust_rpath(path):
+    chrpath = get_chrpath()
+    output = check_output([chrpath, '-l', path])
+    if output[-1] == '\n':
+        output = output[:-1]
+    (obj, rpath) = output.split(': ')
+    prefix = 'RPATH='
+    assert obj == path, (obj, path)
+    assert rpath.startswith(prefix), (rpath, prefix)
+    rpath = rpath[len(prefix):]
+
+    root_path = utils.get_root_path((path, rpath))
+    rel_path = path.replace(root_path, '')
+    rel_rpath = rpath.replace(root_path, '')
+    lib_path = '%s/lib' % build_prefix
+
+    if rpath == lib_path:
+        new_rpath = '$ORIGIN/%s' % normpath(rel_path.count('/') * '../')
+    else:
+        # .so is linking to somewhere outside of $PREFIX/lib; alter RPATH to
+        # point to that location first, then $PREFIX/lib second.
+        rel_file = path.replace(build_prefix, '')[1:]
+        rel_lib_path = utils.rel_lib(rel_file)
+        new_rpath = '$ORIGIN/%s/%s:$ORIGIN/%s' % (
+            normpath(rel_path.count('/') * '../'),
+            rel_rpath,
+            rel_lib_path,
+        )
+
+    check_call([chrpath, '-r', new_rpath, path])
+
 def mk_relative(f):
     assert sys.platform != 'win32'
     if f.startswith('bin/'):
@@ -165,9 +196,7 @@ def mk_relative(f):
 
     path = join(build_prefix, f)
     if sys.platform.startswith('linux') and is_obj(path):
-        rpath = '$ORIGIN/' + utils.rel_lib(f)
-        chrpath = get_chrpath()
-        call([chrpath, '-r', rpath, path])
+        adjust_rpath(path)
 
     if sys.platform == 'darwin' and is_obj(path):
         mk_relative_osx(path)
