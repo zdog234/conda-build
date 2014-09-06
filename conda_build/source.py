@@ -4,7 +4,8 @@ import os
 import sys
 from os.path import join, isdir, isfile, abspath, expanduser
 from shutil import copytree, ignore_patterns, copy2
-from subprocess import check_call, Popen, PIPE
+from subprocess import (check_call, Popen, PIPE, STDOUT,
+                        check_output, CalledProcessError)
 
 from conda.fetch import download
 from conda.utils import hashsum_file
@@ -206,7 +207,15 @@ Error:
     You can install 'patch' using apt-get, yum (Linux), Xcode (MacOSX),
     or conda, cygwin (Windows),
 """ % (os.pathsep.join(external.dir_paths)))
-    check_call([patch, '-p0', '-i', path], cwd=src_dir)
+    try:
+        check_output([patch, '-p0', '-i', path], cwd=src_dir, stderr=STDOUT)
+    except CalledProcessError as err:
+        message = """The command %s raised an error.
+
+        Message: %s
+        """ % (err.cmd, err.output)
+        raise CalledProcessError(message)
+
 
 
 def provide(recipe_dir, meta, patch=True):
